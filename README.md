@@ -17,7 +17,7 @@ Academic-paper Markdown extracted from PDFs or publishers often includes large a
 
 ## Use
 
-Ask Codex to prune a Markdown paper, for example:
+Ask your AI agent to prune a Markdown paper, for example:
 
 ```text
 Use $prune-paper to prune path/to/paper.md
