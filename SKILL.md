@@ -1,53 +1,98 @@
 ---
 name: prune-paper
-description: Prune Markdown papers into -pruned and -reference companions for ingestion. Use when asked to prune an academic paper .md, split references, remove extraction noise, or deduplicate captions without summarizing.
+description: Prune academic paper .md — split references/appendix, strip extraction noise. Use when asked to prune, clean, or deduplicate a paper markdown.
 ---
 
 # Prune Paper
 
 ## Contract
 
-Input must be an academic paper in Markdown (`.md`). Create two derived UTF-8 files without changing the original:
+Input: one academic paper `.md`. Produce three files by splitting + stripping — never summarize or reword.
 
-- `<stem>-pruned.md`: substantive paper text, same wording and order, with noise removed.
-- `<stem>-reference.md`: moved reference/bibliography section, preserved for citation tracing.
+- `<stem>-pruned.md` — body before references, noise removed
+- `<stem>-reference.md` — reference/bibliography section
+- `<stem>-appendix.md` — everything after references
 
-Pruning is deletion and movement only. Do not summarize, paraphrase, merge sections, or improve prose.
+## Workflow
 
-## Safety Rule
+### Phase 1: Split
 
-Prefer leftover noise over lost content. Keep any block that might contain a claim, method detail, limitation, definition, result, dataset, named system, figure/table meaning, caveat, ethical issue, or future-work item.
+```bash
+python3 scripts/split_sections.py <paper.md>
+```
 
-## Steps
+Finds the reference heading (`## References`, `# Bibliography`, `## Works Cited`, etc. — case-insensitive), splits there: before → `-pruned.md`, ref section → `-reference.md`, after → `-appendix.md`.
 
-1. Confirm the input is a Markdown paper.
-2. Inspect headings to locate body, reference section, and extraction artifacts.
-3. Create `<stem>-pruned.md` and `<stem>-reference.md`.
-4. Move `References`, `Bibliography`, `Works cited`, or equivalent reference sections to `-reference.md`.
-5. Remove clear extraction/admin noise from `-pruned.md`.
-6. Scan removed and moved material against the safety rule.
-7. Report removed classes and any uncertain leftovers retained.
+### Phase 2: Review
 
-## Remove From `-pruned.md`
+Open all three files. Scan for obvious anomalies — wrong split point, section in wrong file, truncated content. Don't reason, just look. Fix if something's off.
 
-- Publisher UI, update icons, navigation, cookie/banner, download/share boilerplate.
-- Author affiliations, correspondence, equal-contribution notes, author contributions, acknowledgements, competing interests, publisher notes, additional information, rights/license boilerplate.
-- Local image/hash filenames and standalone image syntax when caption or nearby text preserves figure meaning.
-- Duplicate figure descriptions, especially repeated alt text followed by the same caption.
-- Page headers/footers, line-wrap artifacts, isolated page numbers, journal mastheads, repeated article titles.
+### Phase 3: Prune
 
-## Keep In `-pruned.md`
+Open `-pruned.md`. Remove:
 
-- Title, authors, publication date/year, DOI/URL/arXiv identifier.
-- Abstract, substantive sections, headings, and paragraph order.
-- Figure/table captions once when they encode a roadmap, taxonomy, architecture, task list, metric list, or conceptual distinction.
-- Boxes, callouts, definitions, equations, algorithms, tables, appendices, limitations, ethics/societal-impact sections, and substantive data/code availability statements.
-- Named datasets, systems, benchmarks, examples, methods, metrics, claims, limitations, assumptions, and future-work items.
+- Publisher UI, update icons, cookie/banner, download/share boilerplate
+- Hash image filenames and standalone `![...](hash_img.jpg)` when caption nearby preserves figure meaning
+- Duplicate figure descriptions (alt text repeated verbatim after its caption)
+- Page headers/footers, line-wrap artifacts, isolated page numbers, journal mastheads
 
-## Done When
+Keep:
 
-- Original file is unchanged.
-- `-pruned.md` contains the full substantive paper body in original order.
-- `-reference.md` contains the reference section when one existed, or a short note that no reference section was found.
-- No removed-only material violates the safety rule.
-- Any ambiguous boilerplate was retained or marked with `<!-- prune-review: ... -->`.
+- Author names, affiliations, equal-contribution notes, acknowledgements
+- Abstract, all substantive sections in original order
+- Figure/table captions once when substantive
+- Equations, algorithms, tables, limitations, ethics sections, data/code availability
+- Named datasets, systems, benchmarks, metrics, claims, future-work items
+
+## Pitfalls
+
+### Sequential `patch` fragility on extracted markdown
+
+Extracted markdown from Datalab/MinerU often has repeating structural blocks (figures with alt-text + caption, tables, etc.). When you try to clean these with sequential `patch` calls, later patches can silently break. **Correct approach:** write a one-shot Python script in `/tmp/` that processes the entire file in a single pass, using regex replacement. Prefer this over chaining `patch` calls.
+
+### JSON manifest edits
+
+When editing `figure_manifest.json` to mark appendix items with `"skip": true`, do NOT use sequential `patch` on individual items. Use a `python3 -c "..."` one-liner to load, modify, and re-save the entire JSON in one atomic write.
+
+### Journal masthead matching — use `startswith`, not `==`
+
+Extracted markdown may carry journal/section mastheads like `# INFORMATION SCIENCE`. Exact string equality (`==`) fails on trailing spaces, Unicode variation, or extraction artifacts invisible to a visual scan. **Use `startswith` or `in` instead.** In the cleanup script:
+
+```python
+# WRONG — brittle
+if stripped == '# INFORMATION SCIENCE':
+    continue
+
+# RIGHT — handles trailing spaces and extraction noise
+if stripped.startswith('# INFORMATION SCIENCE'):
+    continue
+```
+
+### Broken paragraph across page break — affiliation + figure splits a sentence
+
+Datalab/MinerU extraction often places an affiliation block and a figure between a sentence tail and a fragment that starts the next paragraph. Common pattern:
+
+```
+...as
+[pagination break]
+Department of ... University ... Email ...
+[pagination break]
+![](figure.jpg)
+**Figure 1.** ...
+[pagination break]
+illustrated in Figure 1. Real content continues...
+```
+
+**Fix:** replace the orphaned `illustrated in Figure 1.` prefix with `Illustrated in Figure 1.` (capitalized, standalone). Do NOT delete the fragment — it carries new content.
+
+## Safety
+
+Prefer leftover noise over lost content. If a block might contain a claim, method, result, or caveat — **keep it**. Mark ambiguous boilerplate with `<!-- prune-review: ... -->`.
+
+## Done when
+
+- Original unchanged
+- Three output files produced
+- `-pruned.md` contains body only, noise removed, original order
+- `-reference.md` and `-appendix.md` each contain their section or a print saying none found
+- No content lost that violates Safety

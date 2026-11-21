@@ -4,12 +4,13 @@ Prune Paper conservatively trims academic papers in Markdown for more efficient 
 
 ## What it does
 
-Given an academic paper in `.md` format, the skill creates two UTF-8 derived files without modifying the original:
+Given an academic paper in `.md` format, the skill creates three UTF-8 derived files without modifying the original:
 
-- `<stem>-pruned.md` — the complete substantive paper body with extraction and publisher noise removed.
+- `<stem>-pruned.md` — the paper body before the reference section, with extraction and publisher noise removed.
 - `<stem>-reference.md` — the paper's reference or bibliography section, retained separately for citation tracing.
+- `<stem>-appendix.md` — everything after the reference section (appendices, supplementary material), retained separately.
 
-It removes only clear noise: publisher UI, author and license boilerplate, page furniture, local image filenames, and duplicated figure descriptions. It does not summarize, paraphrase, merge sections, or rewrite prose.
+It removes only clear noise: publisher UI, page furniture, local image filenames, and duplicated figure descriptions. It does not summarize, paraphrase, merge sections, or rewrite prose.
 
 ## Why use it
 
@@ -27,4 +28,4 @@ The skill favors retaining uncertain material over risking loss of a claim, meth
 
 ## Scope
 
-This is a structural cleanup tool, not a summarizer. The original Markdown remains unchanged; the generated `-pruned.md` and `-reference.md` files are derived reading aids.
+This is a structural cleanup tool, not a summarizer. The original Markdown remains unchanged; the generated `-pruned.md`, `-reference.md`, and `-appendix.md` files are derived reading aids.
